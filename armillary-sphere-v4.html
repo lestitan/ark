@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARKHEON ORIGIN — Filter I</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Cinzel:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --gold: #c9a84c;
+    --gold-light: #f0d080;
+    --gold-dim: #7a6030;
+    --void: #04030a;
+    --scene-size: min(520px, calc(100vw - 24px), calc(100dvh - 96px));
+  }
+
+  html, body {
+    width: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background: var(--void);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Cinzel', serif;
+  }
+
+  /* ── Stars ── */
+  .stars { position: fixed; inset: 0; overflow: hidden; z-index: 0; }
+  .star {
+    position: absolute; border-radius: 50%; background: white;
+    animation: twinkle var(--d) ease-in-out infinite alternate;
+  }
+  @keyframes twinkle {
+    from { opacity: var(--min); transform: scale(1); }
+    to   { opacity: var(--max); transform: scale(1.4); }
+  }
+
+  /* ── 3D scene — fully JS-driven transforms ── */
+  .scene {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: var(--scene-size); height: var(--scene-size);
+    perspective: 800px;
+    z-index: 1;
+    touch-action: manipulation;
+  }
+
+  .gyro {
+    width: 100%; height: 100%;
+    transform-style: preserve-3d;
+    position: relative;
+    will-change: transform;
+  }
+
+  .ring-wrap {
+    position: absolute; inset: 0;
+    transform-style: preserve-3d;
+  }
+
+  .ring {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+
+  /* ── Ring face: outer circle ── */
+  .ring-face {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    transition: border-color 1.4s ease, box-shadow 1.4s ease, opacity 1.4s ease;
+  }
+
+  /* ── Ring face: inner concentric line via ::after ── */
+  .ring-face::after {
+    content: '';
+    position: absolute;
+    inset: 13px;
+    border-radius: 50%;
+    transition: border-color 1.4s ease, opacity 1.4s ease;
+  }
+
+  /* ─── IDLE styles ─── */
+
+  /* Outer ring (r1) - Single Line */
+  #r1 .ring-face {
+    border: 1.5px solid rgba(201,168,76,0.38);
+    box-shadow: 0 0 8px rgba(201,168,76,0.06);
+    opacity: 0.55;
+  }
+
+  /* Middle ring (r2) — inset 34px each side (Kept Double Line) */
+  #r2 .ring-face {
+    inset: 34px;
+    border: 1px dashed rgba(201,168,76,0.26);
+    opacity: 0.38;
+  }
+  #r2 .ring-face::after {
+    border: 1px dashed rgba(201,168,76,0.16);
+    opacity: 0.45;
+  }
+
+  /* Inner ring (r3) — inset 76px each side - Single Line */
+  #r3 .ring-face {
+    inset: 76px;
+    border: 1px solid rgba(201,168,76,0.18);
+    opacity: 0.22;
+  }
+
+  /* ─── LIT styles — each ring glows independently ─── */
+
+  #r2.lit .ring-face {
+    inset: 34px;
+    border: 1.5px solid rgba(201,168,76,0.9);
+    border-style: solid;
+    box-shadow: 0 0 26px rgba(201,168,76,0.5), 0 0 50px rgba(201,168,76,0.2);
+    opacity: 1;
+  }
+  #r2.lit .ring-face::after {
+    border: 1px solid rgba(201,168,76,0.6);
+    border-style: solid;
+    opacity: 1;
+  }
+
+  #r3.lit .ring-face {
+    inset: 76px;
+    border: 1.5px solid rgba(201,168,76,0.8);
+    box-shadow: 0 0 20px rgba(201,168,76,0.45), 0 0 40px rgba(201,168,76,0.18);
+    opacity: 1;
+  }
+
+  #r1.lit .ring-face {
+    border: 1.5px solid rgba(201,168,76,0.95);
+    box-shadow: 0 0 32px rgba(201,168,76,0.55), 0 0 60px rgba(201,168,76,0.22), inset 0 0 14px rgba(201,168,76,0.08);
+    opacity: 1;
+  }
+
+  /* ── Overlays ── */
+  .vignette {
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 38%, rgba(4,3,10,0.88) 100%);
+    z-index: 5; pointer-events: none;
+  }
+  .scanlines {
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.025) 2px,rgba(0,0,0,0.025) 4px);
+    z-index: 20; pointer-events: none;
+  }
+
+  /* ── Hero text ── */
+  .hero {
+    position: relative; z-index: 10;
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center;
+    touch-action: manipulation;
+  }
+
+  .rune-line {
+    font-size: 11px; letter-spacing: 8px; color: var(--gold-dim);
+    opacity: 0; animation: fade-down 1.2s ease forwards 0.3s;
+    margin-bottom: 18px;
+  }
+
+  .title-arkheon {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(38px, 9.4vw, 110px);
+    font-weight: 900; letter-spacing: clamp(6px, 2.6vw, 14px); line-height: 1;
+    color: transparent;
+    background: linear-gradient(160deg, var(--gold-dim) 0%, var(--gold) 30%, var(--gold-light) 50%, var(--gold) 70%, var(--gold-dim) 100%);
+    -webkit-background-clip: text; background-clip: text;
+    background-size: 200% 200%;
+    animation: shimmer 6s ease infinite, fade-up 1.4s ease forwards;
+    opacity: 0;
+    filter: drop-shadow(0 0 30px rgba(201,168,76,0.5));
+    position: relative;
+    cursor: pointer; user-select: none;
+    transition: filter 0.5s ease, letter-spacing 1s ease;
+    will-change: filter, letter-spacing;
+  }
+  .title-arkheon:hover {
+    filter: drop-shadow(0 0 50px rgba(201,168,76,0.9)) drop-shadow(0 0 90px rgba(201,168,76,0.35));
+  }
+  .title-arkheon.lit {
+    filter: drop-shadow(0 0 65px rgba(201,168,76,1)) drop-shadow(0 0 130px rgba(201,168,76,0.55)) drop-shadow(0 0 200px rgba(201,168,76,0.2));
+    letter-spacing: clamp(9px, 3.2vw, 20px);
+  }
+
+  /* Glitch layers */
+  .title-arkheon::before {
+    content: 'ARKHEON'; position: absolute; inset: 0;
+    background: linear-gradient(160deg, #4af0ff 0%, transparent 60%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    opacity: 0; animation: glitch 9s ease infinite 2s; left: 0;
+  }
+  .title-arkheon::after {
+    content: 'ARKHEON'; position: absolute; inset: 0;
+    background: linear-gradient(160deg, #ff4a4a 0%, transparent 60%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    opacity: 0; animation: glitch 9s ease infinite 2.09s; left: 0;
+  }
+  @keyframes glitch {
+    0%,94%,100% { opacity: 0; transform: none; }
+    95% { opacity: 0.4; transform: translateX(3px) skewX(-1deg); }
+    96% { opacity: 0.3; transform: translateX(-3px) skewX(2deg); }
+    97% { opacity: 0; }
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Hint */
+  .hint {
+    font-size: 8.5px; letter-spacing: 5px; color: rgba(201,168,76,0.22);
+    text-transform: uppercase; margin-top: 6px;
+    opacity: 0; animation: fade-up 1s ease forwards 2.2s;
+    transition: opacity 0.8s;
+  }
+  .hint.hide { opacity: 0 !important; pointer-events: none; }
+
+  .divider {
+    display: flex; align-items: center; gap: 16px;
+    margin: 14px 0; width: min(340px, 84vw);
+    opacity: 0; animation: fade-up 1.4s ease forwards 0.6s;
+  }
+  .divider-line {
+    flex: 1; height: 1px;
+    background: linear-gradient(to right, transparent, var(--gold), transparent);
+  }
+  .divider-diamond {
+    width: 6px; height: 6px; background: var(--gold);
+    transform: rotate(45deg); flex-shrink: 0;
+  }
+
+  .title-origin {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(13px, 2.5vw, 22px); font-weight: 300;
+    letter-spacing: clamp(9px, 4.1vw, 22px); color: var(--gold-dim);
+    opacity: 0; animation: fade-up 1.4s ease forwards 0.8s;
+    margin-top: 4px;
+    filter: drop-shadow(0 0 12px rgba(201,168,76,0.3));
+    transition: letter-spacing 0.9s ease, color 0.8s, filter 0.8s;
+  }
+  .title-origin.lit {
+    color: var(--gold);
+    letter-spacing: clamp(12px, 5.1vw, 30px);
+    filter: drop-shadow(0 0 22px rgba(201,168,76,0.65));
+  }
+
+  .tagline {
+    font-size: 10px; letter-spacing: 5px;
+    color: rgba(201,168,76,0.35);
+    margin-top: 28px;
+    opacity: 0; animation: fade-up 1.4s ease forwards 1.2s;
+  }
+
+  .filter-label {
+    position: fixed; bottom: 24px; right: 28px;
+    font-size: 9px; letter-spacing: 4px;
+    color: rgba(201,168,76,0.18);
+    text-transform: uppercase; z-index: 30;
+  }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-down {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 0.6; transform: translateY(0); }
+  }
+
+  @media (max-width: 700px) {
+    :root {
+      --scene-size: min(460px, calc(100vw - 16px), calc(100dvh - 60px));
+    }
+
+    .hero {
+      width: min(94vw, 760px);
+      padding-inline: 12px;
+    }
+
+    .rune-line {
+      letter-spacing: 6px;
+      margin-bottom: 14px;
+    }
+
+    .title-arkheon {
+      font-size: clamp(34px, 11vw, 72px);
+      filter: drop-shadow(0 0 20px rgba(201,168,76,0.34));
+    }
+
+    .title-arkheon:hover {
+      filter: drop-shadow(0 0 28px rgba(201,168,76,0.5));
+    }
+
+    .title-arkheon.lit {
+      filter: drop-shadow(0 0 38px rgba(201,168,76,0.72)) drop-shadow(0 0 72px rgba(201,168,76,0.25));
+    }
+
+    .title-origin {
+      letter-spacing: clamp(8px, 3.6vw, 16px);
+    }
+
+    .title-origin.lit {
+      letter-spacing: clamp(10px, 4.4vw, 22px);
+    }
+
+    .tagline {
+      margin-top: 20px;
+      letter-spacing: 4px;
+    }
+
+    .filter-label {
+      right: 16px;
+      bottom: 14px;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .hero {
+      width: min(96vw, 760px);
+      padding-inline: 10px;
+    }
+
+    .hint {
+      letter-spacing: 3.5px;
+      font-size: 8px;
+    }
+
+    .divider {
+      gap: 10px;
+      margin: 10px 0;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="stars" id="stars"></div>
+
+<div class="scene">
+  <div class="gyro" id="gyro">
+    <div class="ring-wrap"><div class="ring" id="r1"><div class="ring-face"></div></div></div>
+    <div class="ring-wrap"><div class="ring" id="r2"><div class="ring-face"></div></div></div>
+    <div class="ring-wrap"><div class="ring" id="r3"><div class="ring-face"></div></div></div>
+  </div>
+</div>
+
+<div class="vignette"></div>
+<div class="scanlines"></div>
+
+<div class="hero">
+  <div class="rune-line">ᚨ ᚱ ᚲ ᚺ ᛖ ᛟ ᚾ</div>
+  <div class="title-arkheon" id="titleArkheon">ARKHEON</div>
+  <div class="hint" id="hint">· click to awaken ·</div>
+  <div class="divider">
+    <div class="divider-line"></div>
+    <div class="divider-diamond"></div>
+    <div class="divider-line"></div>
+  </div>
+  <div class="title-origin" id="titleOrigin">Origin</div>
+  <div class="tagline">The First Principle · The Eternal Source</div>
+</div>
+
+<div class="filter-label">Filter I — Primordial</div>
+
+<script>
+/* ── Stars ── */
+const starsEl = document.getElementById('stars');
+const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+const useMobileTuning = isCoarsePointer || window.innerWidth <= 700;
+const starCount = useMobileTuning ? 110 : 200;
+
+for (let i = 0; i < starCount; i++) {
+  const s = document.createElement('div');
+  s.classList.add('star');
+  const sz = Math.random() * 2 + 0.4;
+  const maxOffset = 100 - sz * 0.2;
+  s.style.cssText = `width:${sz}px;height:${sz}px;top:${(Math.random() * maxOffset).toFixed(3)}%;left:${(Math.random() * maxOffset).toFixed(3)}%;--d:${(Math.random()*4+2).toFixed(2)}s;--min:${(Math.random()*0.1).toFixed(2)};--max:${(Math.random()*0.7+0.3).toFixed(2)};`;
+  starsEl.appendChild(s);
+}
+
+/* ── Easing ── */
+const easeIn  = t => t * t;
+const easeOut = t => 1 - Math.pow(1-t,3);
+
+/* ── Rotation state ── */
+const state = { gyroX: 6, gyroY: 0, r1: 0, r2: 0, r3: 0 };
+
+/* ── Speeds (deg per frame at 60fps) ── */
+const IDLE = {
+  gyroY:  360 / (40  * 60),
+  r1:     360 / (90  * 60),
+  r2:    -360 / (65  * 60),
+  r3:     360 / (150 * 60),
+};
+const ACTIVE = {
+  gyroY:  360 / (9   * 60) * 50,
+  r1:     360 / (3.5 * 60) * 50,
+  r2:    -360 / (2.8 * 60) * 50,
+  r3:     360 / (4.8 * 60) * 50,
+};
+
+/* ── Sequence timing (ms) ── */
+const RAMP_UP_MS   = useMobileTuning ? 4100 : 4700;
+const HOLD_MS      = useMobileTuning ? 1200 : 1400;
+const RAMP_DOWN_MS = useMobileTuning ? 6400 : 4600;
+const TOTAL_MS     = RAMP_UP_MS + HOLD_MS + RAMP_DOWN_MS;
+
+/* ── Helper to convert exact milliseconds into the speed multiplier ── */
+/* Note: 5000 matches your RAMP_UP_MS of 5 seconds */
+const timeToMult = (ms) => Math.pow(Math.min(ms / RAMP_UP_MS, 1), 3);
+
+/* ── Per-ring glow thresholds (set exactly when they light up) ── */
+const GLOW = {
+  r2:     timeToMult(100),
+  r3:     timeToMult(500),
+  r1:     timeToMult(900),
+  title:  timeToMult(2200),
+  origin: timeToMult(2200),
+};
+
+/* ── State flags ── */
+let sequenceStart = null;
+let running       = false;
+let canClick      = true;
+let speedMult     = 0;
+let requestedStop = false;
+let settling      = false;
+const SPEED_SCALE = 0.0125;
+const rateState = { gY: 0, s1: 0, s2: 0, s3: 0 };
+const RATE_SMOOTHING = 0.1;
+const SETTLE_RATE_SCALE = 0.6;
+const SETTLE_EPSILON = 0.8;
+const settled = { gyroY: false, r1: false, r2: false, r3: false };
+
+const norm360 = (angle) => ((angle % 360) + 360) % 360;
+const nearHome = (angle) => {
+  const wrapped = norm360(angle);
+  return wrapped <= SETTLE_EPSILON || wrapped >= 360 - SETTLE_EPSILON;
+};
+
+/* ── DOM ── */
+const gyroEl   = document.getElementById('gyro');
+const r1El     = document.getElementById('r1');
+const r2El     = document.getElementById('r2');
+const r3El     = document.getElementById('r3');
+const titleEl  = document.getElementById('titleArkheon');
+const originEl = document.getElementById('titleOrigin');
+const hintEl   = document.getElementById('hint');
+const sceneEl  = document.querySelector('.scene');
+const heroEl   = document.querySelector('.hero');
+
+if (isCoarsePointer) {
+  hintEl.textContent = '· tap to awaken ·';
+}
+
+const litState = {
+  r1: false,
+  r2: false,
+  r3: false,
+  title: false,
+  origin: false,
+};
+
+function setLit(el, key, next) {
+  if (litState[key] === next) return;
+  litState[key] = next;
+  el.classList.toggle('lit', next);
+}
+
+/* ── Per-element glow update ── */
+function updateVisuals(mult) {
+  setLit(r2El, 'r2', mult > GLOW.r2);
+  setLit(r3El, 'r3', mult > GLOW.r3);
+  setLit(r1El, 'r1', mult > GLOW.r1);
+  setLit(titleEl, 'title', mult > GLOW.title);
+  setLit(originEl, 'origin', mult > GLOW.origin);
+}
+
+/* ── Apply 3D transforms ── */
+function applyTransforms() {
+  gyroEl.style.transform = `rotateX(${state.gyroX}deg) rotateY(${state.gyroY}deg)`;
+  r1El.style.transform   = `rotateY(${state.r1}deg)`;
+  r2El.style.transform   = `rotateX(${state.r2}deg)`;
+  r3El.style.transform   = `rotateX(55deg) rotateZ(${state.r3}deg)`;
+}
+
+/* ── RAF loop ── */
+let lastTime = null;
+function tick(now) {
+  const dt = lastTime ? Math.min((now - lastTime) / (1000/60), 2) : 1;
+  lastTime = now;
+
+  if (running && sequenceStart !== null) {
+    let t = now - sequenceStart;
+
+    if (requestedStop) {
+      // Enter ramp-down at the position matching current speedMult for smooth continuity.
+      // speedMult = easeOut(1-p) = 1 - p³  →  p = (1 - speedMult)^(1/3)
+      const p = Math.pow(1 - Math.min(speedMult, 1), 1 / 3);
+      sequenceStart = now - (RAMP_UP_MS + HOLD_MS + p * RAMP_DOWN_MS);
+      requestedStop = false;
+      t = now - sequenceStart;
+    }
+
+    if (t < RAMP_UP_MS) {
+      speedMult = easeIn(t / RAMP_UP_MS);
+    } else if (t < RAMP_UP_MS + HOLD_MS) {
+      speedMult = 1.0;
+    } else if (t < TOTAL_MS) {
+      const p = (t - RAMP_UP_MS - HOLD_MS) / RAMP_DOWN_MS;
+      speedMult = easeOut(1 - p);
+    } else {
+      speedMult     = 0;
+      running       = false;
+      sequenceStart = null;
+      requestedStop = false;
+      settling      = true;
+      settled.gyroY = false;
+      settled.r1    = false;
+      settled.r2    = false;
+      settled.r3    = false;
+    }
+  }
+
+  if (settling) {
+    const settleGY = IDLE.gyroY * SETTLE_RATE_SCALE;
+    const settleS1 = IDLE.r1    * SETTLE_RATE_SCALE;
+    const settleS2 = IDLE.r2    * SETTLE_RATE_SCALE;
+    const settleS3 = IDLE.r3    * SETTLE_RATE_SCALE;
+
+    if (!settled.gyroY) {
+      state.gyroY += settleGY * dt;
+      if (nearHome(state.gyroY)) {
+        state.gyroY = 0;
+        settled.gyroY = true;
+      }
+    }
+    if (!settled.r1) {
+      state.r1 += settleS1 * dt;
+      if (nearHome(state.r1)) {
+        state.r1 = 0;
+        settled.r1 = true;
+      }
+    }
+    if (!settled.r2) {
+      state.r2 += settleS2 * dt;
+      if (nearHome(state.r2)) {
+        state.r2 = 0;
+        settled.r2 = true;
+      }
+    }
+    if (!settled.r3) {
+      state.r3 += settleS3 * dt;
+      if (nearHome(state.r3)) {
+        state.r3 = 0;
+        settled.r3 = true;
+      }
+    }
+
+    const gyroXAmp = 6;
+    state.gyroX = gyroXAmp * Math.sin(state.gyroY * Math.PI / 180);
+
+    if (settled.gyroY && settled.r1 && settled.r2 && settled.r3) {
+      settling = false;
+      canClick = true;
+      rateState.gY = 0;
+      rateState.s1 = 0;
+      rateState.s2 = 0;
+      rateState.s3 = 0;
+      hintEl.classList.remove('hide');
+    }
+
+    updateVisuals(speedMult);
+    applyTransforms();
+    requestAnimationFrame(tick);
+    return;
+  }
+
+  const targetGY = IDLE.gyroY + (ACTIVE.gyroY * SPEED_SCALE - IDLE.gyroY) * speedMult;
+  const targetS1 = IDLE.r1    + (ACTIVE.r1    * SPEED_SCALE - IDLE.r1)    * speedMult;
+  const targetS2 = IDLE.r2    + (ACTIVE.r2    * SPEED_SCALE - IDLE.r2)    * speedMult;
+  const targetS3 = IDLE.r3    + (ACTIVE.r3    * SPEED_SCALE - IDLE.r3)    * speedMult;
+
+  const blend = 1 - Math.pow(1 - RATE_SMOOTHING, dt);
+  rateState.gY += (targetGY - rateState.gY) * blend;
+  rateState.s1 += (targetS1 - rateState.s1) * blend;
+  rateState.s2 += (targetS2 - rateState.s2) * blend;
+  rateState.s3 += (targetS3 - rateState.s3) * blend;
+
+  state.gyroY += rateState.gY * dt;
+  const gyroXAmp = 6 + (22 - 6) * speedMult;
+  state.gyroX    = gyroXAmp * Math.sin(state.gyroY * Math.PI / 180);
+  state.r1      += rateState.s1 * dt;
+  state.r2      += rateState.s2 * dt;
+  state.r3      += rateState.s3 * dt;
+
+  updateVisuals(speedMult);
+  applyTransforms();
+
+  requestAnimationFrame(tick);
+}
+
+requestAnimationFrame(tick);
+
+let lastTrigger = 0;
+function triggerSequence() {
+  const _now = performance.now();
+  if (_now - lastTrigger < 300) return;
+  lastTrigger = _now;
+  if (settling || (running && requestedStop)) {
+    settling      = false;
+    running       = true;
+    canClick      = false;
+    requestedStop = false;
+    speedMult     = Math.max(speedMult, 0.03);
+    updateVisuals(speedMult);
+    sequenceStart = performance.now();
+    hintEl.classList.add('hide');
+    return;
+  }
+
+  if (!running) {
+    if (!canClick) return;
+    canClick      = false;
+    running       = true;
+    settling      = false;
+    requestedStop = false;
+    speedMult     = Math.max(speedMult, 0.03);
+    updateVisuals(speedMult);
+    sequenceStart = performance.now();
+    hintEl.classList.add('hide');
+    return;
+  }
+  requestedStop = true;
+}
+
+// pointerdown for responsive feel; click for programmatic/accessibility (e.g. tests)
+// The 300ms debounce in triggerSequence prevents double-firing.
+[titleEl, sceneEl, heroEl].forEach((target) => {
+  if (!target) return;
+  target.addEventListener('pointerdown', triggerSequence, { passive: true });
+  target.addEventListener('click', triggerSequence);
+});
+
+document.body.addEventListener('pointerdown', (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  if (target.closest('.hero, .scene')) {
+    triggerSequence();
+  }
+}, { passive: true });
+
+titleEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    triggerSequence();
+  }
+});
+</script>
+</body>
+</html>
